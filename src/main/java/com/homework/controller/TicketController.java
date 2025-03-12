@@ -1,9 +1,11 @@
 package com.homework.controller;
 
+import com.homework.model.entity.ApiResponse;
 import com.homework.model.entity.Status;
 import com.homework.model.entity.Ticket;
 import com.homework.model.request.TicketRequest;
 import com.homework.model.request.UpdatePaymentStatusRequest;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
@@ -32,33 +34,36 @@ public class TicketController {
     }
 
     @GetMapping("/getAll")
-    public List<Ticket> getAllTickets(@RequestParam(defaultValue = "1") int page, @RequestParam(defaultValue = "5") int size) {
+    public ApiResponse<List<Ticket>> getAllTickets(@RequestParam(defaultValue = "1") int page, @RequestParam(defaultValue = "5") int size) {
         int start = (page - 1) * size;
         int end = Math.min(start + size, TICKETS.size());
 
         if (start >= TICKETS.size()) {
-            return new ArrayList<>(); // return empty list if page is out of bounds
+            return new ApiResponse<>(true, "No tickets found", HttpStatus.OK, new ArrayList<>(), ZonedDateTime.now());
         }
-        return TICKETS.subList(start, end);
+
+        return new ApiResponse<>(true, "Tickets retrieved successfully", HttpStatus.OK, TICKETS.subList(start, end), ZonedDateTime.now());
     }
 
     @PostMapping("/add")
-    public Ticket saveTicket(@RequestBody TicketRequest request) {
+    public ApiResponse<Ticket> saveTicket(@RequestBody TicketRequest request) {
         Ticket ticket = new Ticket(TICKET_ID.getAndIncrement(), request.getPassengerName(), request.getTravelDate(), request.getSourceStation(), request.getDestinationStation(), request.getPrice(), request.getPaymentStatus(), request.getTicketStatus(), request.getSeatNumber());
         TICKETS.add(ticket);
-        return ticket;
+        return new ApiResponse<>(true, "Ticket added successfully", HttpStatus.CREATED, ticket, ZonedDateTime.now());
     }
+
     @GetMapping("/{ticket-id}")
-    public Ticket getTicketById(@PathVariable("ticket-id") Long ticketId) {
+    public ApiResponse<Ticket> getTicketById(@PathVariable("ticket-id") Long ticketId) {
         for (Ticket ticket : TICKETS) {
             if (ticket.getTicketId().equals(ticketId)) {
-                return ticket;
+                return new ApiResponse<>(true, "Ticket found", HttpStatus.OK, ticket, ZonedDateTime.now());
             }
         }
-        return null;
+        return new ApiResponse<>(false, "Ticket not found", HttpStatus.NOT_FOUND, null, ZonedDateTime.now());
     }
+
     @PutMapping("/{ticket-id}")
-    public Ticket updateTicketById(@PathVariable("ticket-id") Long ticketId, @RequestBody TicketRequest request) {
+    public ApiResponse<Ticket> updateTicketById(@PathVariable("ticket-id") Long ticketId, @RequestBody TicketRequest request) {
         for (Ticket ticket : TICKETS) {
             if (ticket.getTicketId().equals(ticketId)) {
                 ticket.setPassengerName(request.getPassengerName());
@@ -69,44 +74,45 @@ public class TicketController {
                 ticket.setPaymentStatus(request.getPaymentStatus());
                 ticket.setTicketStatus(request.getTicketStatus());
                 ticket.setSeatNumber(request.getSeatNumber());
-                return ticket;
+                return new ApiResponse<>(true, "Ticket updated successfully", HttpStatus.OK, ticket, ZonedDateTime.now());
             }
         }
-
-        return null;
+        return new ApiResponse<>(false, "Ticket not found", HttpStatus.NOT_FOUND, null, ZonedDateTime.now());
     }
+
     @DeleteMapping("/{ticket-id}")
-    public String deleteTicketById(@PathVariable("ticket-id") Long ticketId) {
+    public ApiResponse<String> deleteTicketById(@PathVariable("ticket-id") Long ticketId) {
         for (Ticket ticket : TICKETS) {
             if (ticket.getTicketId().equals(ticketId)) {
                 TICKETS.remove(ticket);
-                return "Deleted successfully";
+                return new ApiResponse<>(true, "Deleted successfully", HttpStatus.OK, "Deleted successfully", ZonedDateTime.now());
             }
         }
-        return null;
+        return new ApiResponse<>(false, "Ticket not found", HttpStatus.NOT_FOUND, null, ZonedDateTime.now());
     }
+
     @GetMapping("/search")
-    public List<Ticket> getTicketByPassengerId(@RequestParam String name) {
+    public ApiResponse<List<Ticket>> getTicketByPassengerId(@RequestParam String name) {
         List<Ticket> tickets = new ArrayList<>();
         for (Ticket ticket : TICKETS) {
             if (ticket.getPassengerName().toLowerCase().contains(name.toLowerCase())) {
                 tickets.add(ticket);
             }
         }
-        return tickets;
+        return new ApiResponse<>(true, "Search results retrieved", HttpStatus.OK, tickets, ZonedDateTime.now());
     }
+
     @PostMapping("/bulk")
-    public List<Ticket> bulkCreate(@RequestBody List<TicketRequest> ticketRequests) {
-        List<Ticket> tickets = new ArrayList<>();
+    public ApiResponse<List<Ticket>> bulkCreate(@RequestBody List<TicketRequest> ticketRequests) {
         for (TicketRequest ticketRequest : ticketRequests) {
             Ticket ticket = new Ticket(TICKET_ID.getAndIncrement(), ticketRequest.getPassengerName(), ticketRequest.getTravelDate(), ticketRequest.getSourceStation(), ticketRequest.getDestinationStation(), ticketRequest.getPrice(), ticketRequest.getPaymentStatus(), ticketRequest.getTicketStatus(), ticketRequest.getSeatNumber());
             TICKETS.add(ticket);
         }
-        return TICKETS;
+        return new ApiResponse<>(true, "Tickets created successfully", HttpStatus.CREATED, TICKETS, ZonedDateTime.now());
     }
+
     @PutMapping("/bulk")
-    public List<Ticket> bulkUpdate(@RequestBody List<UpdatePaymentStatusRequest> ticketRequests) {
-        List<Ticket> tickets = new ArrayList<>();
+    public ApiResponse<List<Ticket>> bulkUpdate(@RequestBody List<UpdatePaymentStatusRequest> ticketRequests) {
         for (UpdatePaymentStatusRequest ticketRequest : ticketRequests) {
             for (Ticket ticket : TICKETS) {
                 if (ticket.getTicketId().equals(ticketRequest.getTicketId())) {
@@ -114,19 +120,19 @@ public class TicketController {
                 }
             }
         }
-        return TICKETS;
+        return new ApiResponse<>(true, "Payment statuses updated", HttpStatus.OK, TICKETS, ZonedDateTime.now());
     }
+
     @GetMapping("/filter")
-    public List<Ticket> filterTicketStatus(@RequestParam Status ticketStatus, @RequestParam String travelDate) {
+    public ApiResponse<List<Ticket>> filterTicketStatus(@RequestParam Status ticketStatus, @RequestParam String travelDate) {
         List<Ticket> tickets = new ArrayList<>();
-        LocalDate parsedDate = LocalDate.parse(travelDate, DateTimeFormatter.ofPattern("yyyy-MM-dd")); //gotta use formatter cuz im using zoned date time
+        ZonedDateTime parsedDate = ZonedDateTime.parse(travelDate + "T00:00:00Z");
 
         for (Ticket ticket : TICKETS) {
-            // convert ZonedDateTime to LocalDate for comparison
-            if (ticket.getTicketStatus() == ticketStatus && ticket.getTravelDate().toLocalDate().equals(parsedDate)) {
+            if (ticket.getTicketStatus() == ticketStatus && ticket.getTravelDate().toLocalDate().equals(parsedDate.toLocalDate())) {
                 tickets.add(ticket);
             }
         }
-        return tickets;
+        return new ApiResponse<>(true, "Filtered tickets retrieved", HttpStatus.OK, tickets, ZonedDateTime.now());
     }
 }
